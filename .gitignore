@@ -4,3 +4,7 @@ build/
 *.o
 *.obj
 *.pdf
+*.so
+
+static_test
+dynamic_test
