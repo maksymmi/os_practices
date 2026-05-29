@@ -5,6 +5,3 @@ build/
 *.obj
 *.pdf
 *.so
-
-static_test
-dynamic_test
