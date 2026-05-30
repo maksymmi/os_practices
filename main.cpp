@@ -1,112 +1,71 @@
 #include <iostream>
 #include <vector>
-#include <string>
-#include <algorithm>
-#include <clocale>
-#include <locale>
-#include <cwchar>
+#include "rsa_lib.h"
 
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
-#include <codecvt>
+// Зберігання ключів
+struct RSAKeyPair {
+    uint64_t e;
+    uint64_t d;
+    uint64_t n;
+};
 
-#ifdef UNICODE
-    typedef wchar_t TCHAR_SIM;
-    #define TEXT_SIM(x) L ## x
-#else
-    typedef char TCHAR_SIM;
-    #define TEXT_SIM(x) x
-#endif
+// Генерації ключів 
+RSAKeyPair generate_keys(uint64_t p, uint64_t q) {
+    RSAKeyPair keys;
 
-int compare_wchar(const void* a, const void* b) {
-    const wchar_t* strA = *(const wchar_t**)a;
-    const wchar_t* strB = *(const wchar_t**)b;
+    keys.n = p * q;
+    uint64_t phi = (p - 1) * (q - 1);
 
-    return wcscmp(strA, strB);
+    keys.e = generate_e(phi);
+    keys.d = generate_d(keys.e, phi);
+
+    return keys;
 }
 
 int main() {
-    // Налаштування локалі 
-    std::setlocale(LC_ALL, ""); 
-    std::locale loc("");
-    std::locale::global(loc);
-    std::wcout.imbue(loc);
+    std::cout << "~!~|~~~|~!~\n\n";
 
-    std::wcout << L"Перевірка кодування\n";
-    std::wcout << L"Розмір типу TCHAR_SIM -> " << sizeof(TCHAR_SIM) << L" байт(ів).\n";
+    // Генеруємо ключі
+    RSAKeyPair key0 = generate_keys(61, 53); // p0=61, q0=53
+    RSAKeyPair key1 = generate_keys(47, 71); // p1=47, q1=71
 
-    #ifdef UNICODE
-        std::wcout << L"Режим компіляції -> UNICODE\n";
-    #else
-        std::wcout << L"Режим компіляції -> ASCII / MultiByte\n";
-    #endif
+    std::cout << "Ключ 0 (n0=" << key0.n << ", e0=" << key0.e << ", d0=" << key0.d << ")\n";
+    std::cout << "Ключ 1 (n1=" << key1.n << ", e1=" << key1.e << ", d1=" << key1.d << ")\n\n";
 
-    std::vector<std::string> family_ascii = {
-        "Варениченко Ничипір Іванович",
-        "Ґудзь Галя Максимівна",
-        "Боруля Степан Мартинович",
-        "Кайдаш Карпо Омелькович"
-    };
+    std::vector<uint64_t> test_data = {42, 123, 2026, 888, 3000};
 
-    std::wstring_convert<std::codecvt_utf8<wchar_t>> converter;
+    for (size_t i = 0; i < test_data.size(); ++i) {
+        uint64_t t = test_data[i];
 
-    std::wcout << L"\nВивід масиву ASCII\n";
+        std::cout << ">>> Оригінальне повідомлення t[" << i << "] = " << t << "\n";
 
-    for (const auto& name : family_ascii) {
-        std::wcout << converter.from_bytes(name) << L"\n";
-    }
+        uint64_t e1t = rsa_crypt(t, key1.e, key1.n);
+        std::cout << "  Зашифровано e1 (e1t): " << e1t << "\n";
 
-    std::vector<std::wstring> family_unicode;
+        uint64_t d1e1t = rsa_crypt(e1t, key1.d, key1.n);
+        std::cout << "  Розшифровано d1 (d1e1t): " << d1e1t << "\n";
 
-    for (const auto& name : family_ascii) {
-        family_unicode.push_back(converter.from_bytes(name));
-    }
+        if (d1e1t != t) {
+            std::cerr << "   ERROR -> Розшифроване значення d1e1t не дорівнює оригіналу t[" << i << "]!\n";
 
-    std::wcout << L"\nВивід масиву UNICODE\n";
-    std::wcout << L"\n[wprintf]:\n";
+            return 1;
+        }
 
-    for (const auto& name : family_unicode) {
-        wprintf(L"%ls\n", name.c_str());
-    }
+        //  Зашифрування {e0, n0}
+        uint64_t e0d1e1t = rsa_crypt(d1e1t, key0.e, key0.n);
+        std::cout << "  Зашифровано e0 (e0d1e1t): " << e0d1e1t << "\n";
 
-    std::wcout << L"\n[wcout]:\n";
+        // Розшифрування {d0, n0}
+        uint64_t d0e0d1e1t = rsa_crypt(e0d1e1t, key0.d, key0.n);
+        std::cout << "  Розшифровано d0 (d0e0d1e1t): " << d0e0d1e1t << "\n";
 
-    for (const auto& name : family_unicode) {
-        std::wcout << name << L"\n";
-    }
+        if (d0e0d1e1t != t) {
+            std::cerr << "  ERROR -> Розшифроване значення d0e0d1e1t не дорівнює оригіналу t[" << i << "]!\n";
+            return 1;
+        }
 
-    std::wcout << L"\n[MessageBox симуляція.?] ->\n";
-    std::wcout << L"| Повідомлення -> " << family_unicode[0] << L" |\n";
-
-    std::vector<const wchar_t*> qsort_arr;
-
-    for (const auto& name : family_unicode) {
-        qsort_arr.push_back(name.c_str());
-    }
-
-    qsort(qsort_arr.data(), qsort_arr.size(), sizeof(const wchar_t*), compare_wchar);
-
-    std::vector<std::wstring> family_stdsort = family_unicode;
-    std::sort(family_stdsort.begin(), family_stdsort.end());
-
-    std::wcout << L"\nВідсортований масив UNICODE (std::sort)\n";
-
-    for (const auto& name : family_stdsort) {
-        std::wcout << name << L"\n";
-    }
-
-    std::vector<std::string> family_ascii_sorted;
-
-    for (const auto& name : family_stdsort) {
-        family_ascii_sorted.push_back(converter.to_bytes(name));
-    }
-
-    std::wcout << L"\nРезультат зворотнього перетворення(ASCII)\n";
-
-    for (const auto& name : family_ascii_sorted) {
-        std::wcout << converter.from_bytes(name) << L"\n";
+        std::cout << "  -> Успіх! Дані збігаються.\n\n";
     }
 
     return 0;
 }
-#pragma GCC diagnostic pop
