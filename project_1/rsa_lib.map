@@ -1,0 +1,8 @@
+{
+    global:
+        generate_e;
+        generate_d;
+        rsa_crypt;
+    local:
+        *;
+};
